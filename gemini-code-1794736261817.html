@@ -1,0 +1,2253 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Veloce — Modern SaaS Project & Task Management</title>
+
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            lightBg: '#FAFAFA',
+            darkBg: '#09090B',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Petite-Vue CDN -->
+  <script src="https://unpkg.com/petite-vue@0.4.1/dist/petite-vue.iife.js"></script>
+
+  <style>
+    /* Mencegah Flash of Unstyled Content (FOUC) */
+    [v-cloak] {
+      display: none !important;
+    }
+
+    /* Custom Scrollbar Minimalis ala Linear */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(161, 161, 170, 0.3);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(161, 161, 170, 0.5);
+    }
+
+    /* Animasi Halus untuk Toast & Modal */
+    @keyframes slideUpFade {
+      from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+    .animate-toast {
+      animation: slideUpFade 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes modalPop {
+      from {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+    .animate-modal {
+      animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+
+<body class="bg-lightBg dark:bg-darkBg text-zinc-900 dark:text-zinc-100 font-sans antialiased selection:bg-indigo-500 selection:text-white transition-colors duration-200 min-h-screen overflow-x-hidden">
+
+  <!-- ROOT SPA CONTAINER -->
+  <div
+    id="app"
+    v-cloak
+    @vue:mounted="init()"
+    v-effect="refreshIcons()"
+    class="min-h-screen flex flex-col lg:flex-row"
+  >
+
+    <!-- ==========================================
+         MOBILE HEADER & SLIDE-OVER DRAWER
+    =========================================== -->
+    <header class="lg:hidden sticky top-0 z-30 h-14 px-4 bg-white/85 dark:bg-zinc-950/85 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <button
+          @click="mobileMenuOpen = true"
+          class="p-1.5 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 transition"
+          aria-label="Buka Menu"
+        >
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+        <a href="#/dashboard" class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-sm shadow-indigo-500/20">
+            <i data-lucide="layers" class="w-4 h-4"></i>
+          </div>
+          <span class="font-bold text-sm tracking-tight">{{ profile.workspaceName || 'Veloce' }}</span>
+        </a>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button
+          @click="openCreateModal()"
+          class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition"
+        >
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span>Tugas</span>
+        </button>
+        <button
+          @click="toggleTheme()"
+          class="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition"
+          title="Ganti Tema"
+        >
+          <span v-if="theme === 'dark'"><i data-lucide="sun" class="w-4 h-4 text-amber-400"></i></span>
+          <span v-else><i data-lucide="moon" class="w-4 h-4 text-zinc-700"></i></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- MOBILE SLIDE-OVER DRAWER -->
+    <div
+      v-if="mobileMenuOpen"
+      class="fixed inset-0 z-50 lg:hidden flex"
+    >
+      <div
+        @click="mobileMenuOpen = false"
+        class="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+      ></div>
+
+      <aside class="relative w-72 max-w-[80vw] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-800 flex flex-col justify-between z-10 p-4">
+        <div>
+          <div class="flex items-center justify-between pb-4 mb-4 border-b border-zinc-200 dark:border-zinc-800/80">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+                <i data-lucide="layers" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <p class="font-bold text-sm leading-none">{{ profile.workspaceName }}</p>
+                <span class="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">PRO WORKSPACE</span>
+              </div>
+            </div>
+            <button
+              @click="mobileMenuOpen = false"
+              class="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <nav class="space-y-1">
+            <a
+              href="#/dashboard"
+              @click="mobileMenuOpen = false"
+              :class="currentRoute === 'dashboard'
+                ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-200/60 dark:border-indigo-500/20'
+                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 border-transparent'"
+              class="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm border transition"
+            >
+              <div class="flex items-center gap-3">
+                <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                <span>Overview Dashboard</span>
+              </div>
+            </a>
+
+            <a
+              href="#/tasks"
+              @click="mobileMenuOpen = false"
+              :class="currentRoute === 'tasks'
+                ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-200/60 dark:border-indigo-500/20'
+                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 border-transparent'"
+              class="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm border transition"
+            >
+              <div class="flex items-center gap-3">
+                <i data-lucide="kanban" class="w-4 h-4"></i>
+                <span>Workspace Tasks</span>
+              </div>
+              <span class="px-1.5 py-0.5 text-[11px] font-mono rounded bg-zinc-200/70 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                {{ stats.total }}
+              </span>
+            </a>
+
+            <a
+              href="#/settings"
+              @click="mobileMenuOpen = false"
+              :class="currentRoute === 'settings'
+                ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-200/60 dark:border-indigo-500/20'
+                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 border-transparent'"
+              class="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm border transition"
+            >
+              <div class="flex items-center gap-3">
+                <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+                <span>Settings & Data</span>
+              </div>
+            </a>
+          </nav>
+        </div>
+
+        <!-- Mobile Profile Footer -->
+        <div class="pt-4 border-t border-zinc-200 dark:border-zinc-800 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 text-white font-bold text-xs flex items-center justify-center uppercase shrink-0">
+            {{ profile.initials || 'AR' }}
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold truncate">{{ profile.name }}</p>
+            <p class="text-xs text-zinc-500 dark:text-zinc-400 truncate">{{ profile.role }}</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- ==========================================
+         DESKTOP FIXED SIDEBAR (lg:w-64)
+    =========================================== -->
+    <aside class="hidden lg:flex lg:w-64 lg:fixed lg:inset-y-0 lg:left-0 z-20 bg-white dark:bg-zinc-950/90 border-r border-zinc-200/90 dark:border-zinc-800/80 flex-col justify-between select-none">
+      <!-- Top Brand & CTA -->
+      <div class="p-4 space-y-5">
+        <div class="flex items-center justify-between px-1">
+          <a href="#/dashboard" class="flex items-center gap-2.5 group">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+              <i data-lucide="layers" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h1 class="font-bold text-sm tracking-tight text-zinc-900 dark:text-zinc-100 leading-none">
+                {{ profile.workspaceName || 'Veloce' }}
+              </h1>
+              <span class="text-[10px] font-mono tracking-wider uppercase text-indigo-600 dark:text-indigo-400 font-medium">
+                Linear-Grade Workspace
+              </span>
+            </div>
+          </a>
+        </div>
+
+        <!-- Quick New Task Button -->
+        <button
+          @click="openCreateModal()"
+          class="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium text-xs shadow-sm shadow-indigo-500/20 transition group"
+        >
+          <span class="flex items-center gap-2">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>Buat Tugas Baru</span>
+          </span>
+          <kbd class="px-1.5 py-0.5 text-[10px] font-mono bg-indigo-700/80 text-indigo-100 rounded border border-indigo-400/30">
+            N
+          </kbd>
+        </button>
+
+        <!-- Primary Navigation -->
+        <div class="space-y-1">
+          <p class="px-2.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
+            Navigasi Utama
+          </p>
+
+          <a
+            href="#/dashboard"
+            :class="currentRoute === 'dashboard'
+              ? 'bg-zinc-100 dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 font-semibold border-zinc-200/80 dark:border-zinc-800'
+              : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/50 hover:text-zinc-900 dark:hover:text-zinc-200 border-transparent'"
+            class="flex items-center justify-between px-2.5 py-2 rounded-lg text-xs border transition"
+          >
+            <span class="flex items-center gap-2.5">
+              <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+              <span>Overview Dashboard</span>
+            </span>
+          </a>
+
+          <a
+            href="#/tasks"
+            :class="currentRoute === 'tasks'
+              ? 'bg-zinc-100 dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 font-semibold border-zinc-200/80 dark:border-zinc-800'
+              : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/50 hover:text-zinc-900 dark:hover:text-zinc-200 border-transparent'"
+            class="flex items-center justify-between px-2.5 py-2 rounded-lg text-xs border transition"
+          >
+            <span class="flex items-center gap-2.5">
+              <i data-lucide="kanban" class="w-4 h-4"></i>
+              <span>Workspace & Board</span>
+            </span>
+            <span class="px-1.5 py-0.5 text-[10px] font-mono rounded-md bg-zinc-200/70 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+              {{ stats.total }}
+            </span>
+          </a>
+
+          <a
+            href="#/settings"
+            :class="currentRoute === 'settings'
+              ? 'bg-zinc-100 dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 font-semibold border-zinc-200/80 dark:border-zinc-800'
+              : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/50 hover:text-zinc-900 dark:hover:text-zinc-200 border-transparent'"
+            class="flex items-center justify-between px-2.5 py-2 rounded-lg text-xs border transition"
+          >
+            <span class="flex items-center gap-2.5">
+              <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+              <span>Settings & Preferensi</span>
+            </span>
+          </a>
+        </div>
+
+        <!-- Workspace Quick Summary Box -->
+        <div class="pt-3 border-t border-zinc-200/70 dark:border-zinc-800/70">
+          <div class="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/80 space-y-2.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-zinc-500 dark:text-zinc-400 font-medium">Sprint Progress</span>
+              <span class="font-mono font-semibold text-indigo-600 dark:text-indigo-400">{{ stats.completionRate }}%</span>
+            </div>
+            <div class="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-500"
+                :style="{ width: stats.completionRate + '%' }"
+              ></div>
+            </div>
+            <div class="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
+              <span>{{ stats.done }} Selesai</span>
+              <span>{{ stats.inProgress }} Aktif</span>
+              <span>{{ stats.todo }} Antre</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom User Profile & Theme Switcher -->
+      <div class="p-3 border-t border-zinc-200/80 dark:border-zinc-800/80 space-y-2">
+        <div class="flex items-center justify-between px-2 py-1.5 rounded-lg bg-zinc-100/70 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60">
+          <span class="text-[11px] font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
+            <span v-if="theme === 'dark'"><i data-lucide="moon" class="w-3.5 h-3.5 text-indigo-400"></i></span>
+            <span v-else><i data-lucide="sun" class="w-3.5 h-3.5 text-amber-500"></i></span>
+            <span>Mode {{ theme === 'dark' ? 'Gelap' : 'Terang' }}</span>
+          </span>
+          <button
+            @click="toggleTheme()"
+            class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+            :class="theme === 'dark' ? 'bg-indigo-600' : 'bg-zinc-300'"
+            role="switch"
+            aria-label="Toggle Theme"
+          >
+            <span
+              class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+              :class="theme === 'dark' ? 'translate-x-4' : 'translate-x-0'"
+            ></span>
+          </button>
+        </div>
+
+        <a
+          href="#/settings"
+          class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 transition group"
+        >
+          <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 text-white font-bold text-xs flex items-center justify-center uppercase shrink-0 shadow-xs">
+            {{ profile.initials || 'AR' }}
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
+              {{ profile.name }}
+            </p>
+            <p class="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+              {{ profile.role }}
+            </p>
+          </div>
+          <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-zinc-400 group-hover:translate-x-0.5 transition-transform"></i>
+        </a>
+      </div>
+    </aside>
+
+    <!-- ==========================================
+         MAIN CONTENT AREA
+    =========================================== -->
+    <div class="flex-1 lg:pl-64 flex flex-col min-h-screen pb-20 lg:pb-10">
+
+      <!-- Desktop Top Sticky Subheader -->
+      <header class="hidden lg:flex sticky top-0 z-10 h-14 px-8 bg-lightBg/80 dark:bg-darkBg/80 backdrop-blur-md border-b border-zinc-200/80 dark:border-zinc-800/80 items-center justify-between">
+        <div class="flex items-center gap-2 text-xs">
+          <span class="text-zinc-400 dark:text-zinc-500 font-medium">{{ profile.workspaceName }}</span>
+          <span class="text-zinc-300 dark:text-zinc-700">/</span>
+          <span class="font-semibold text-zinc-800 dark:text-zinc-200 capitalize flex items-center gap-1.5">
+            <span v-if="currentRoute === 'dashboard'">Overview Dashboard</span>
+            <span v-else-if="currentRoute === 'tasks'">Workspace Tasks</span>
+            <span v-else>Settings & Preferences</span>
+          </span>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="hidden xl:flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 px-2.5 py-1 rounded-md border border-zinc-200/70 dark:border-zinc-800">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Auto-saved ke LocalStorage</span>
+          </div>
+
+          <button
+            @click="openCreateModal()"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-white transition shadow-xs"
+          >
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>Tambah Tugas</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- ==========================================
+           VIEW 1: OVERVIEW DASHBOARD (#/dashboard)
+      =========================================== -->
+      <main v-if="currentRoute === 'dashboard'" class="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl w-full mx-auto space-y-6">
+        <!-- Welcome Header -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              Selamat datang kembali, {{ profile.name.split(' ')[0] }} 👋
+            </h2>
+            <p class="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Berikut adalah ringkasan metrik eksekusi proyek dan distribusi beban kerja tim Anda hari ini.
+            </p>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <a
+              href="#/tasks"
+              class="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-200 hover:border-indigo-500/50 transition shadow-2xs"
+            >
+              <i data-lucide="kanban" class="w-3.5 h-3.5 text-indigo-500"></i>
+              <span>Buka Kanban Board</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- 4 KPI CARDS -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <!-- KPI 1: Total Tugas -->
+          <div class="p-5 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 shadow-2xs flex flex-col justify-between">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Total Tugas Terdaftar</span>
+              <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                <i data-lucide="layers-3" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div class="mt-4 flex items-baseline justify-between">
+              <span class="text-3xl font-bold font-mono tracking-tight">{{ stats.total }}</span>
+              <span class="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+                {{ stats.todo }} antrean baru
+              </span>
+            </div>
+          </div>
+
+          <!-- KPI 2: Tugas Selesai (Completion Rate) -->
+          <div class="p-5 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 shadow-2xs flex flex-col justify-between">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Tingkat Penyelesaian</span>
+              <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div class="mt-4 flex items-baseline justify-between">
+              <div class="flex items-baseline gap-2">
+                <span class="text-3xl font-bold font-mono tracking-tight text-emerald-600 dark:text-emerald-400">{{ stats.completionRate }}%</span>
+                <span class="text-xs text-zinc-500 font-mono">({{ stats.done }}/{{ stats.total }})</span>
+              </div>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
+                Done
+              </span>
+            </div>
+          </div>
+
+          <!-- KPI 3: Sedang Dikerjakan (In Progress) -->
+          <div class="p-5 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 shadow-2xs flex flex-col justify-between">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Sedang Dikerjakan</span>
+              <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <i data-lucide="timer" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div class="mt-4 flex items-baseline justify-between">
+              <span class="text-3xl font-bold font-mono tracking-tight text-amber-600 dark:text-amber-400">{{ stats.inProgress }}</span>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium">
+                In Progress
+              </span>
+            </div>
+          </div>
+
+          <!-- KPI 4: Prioritas Tinggi (High/Urgent) -->
+          <div class="p-5 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 shadow-2xs flex flex-col justify-between">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Prioritas Tinggi (High)</span>
+              <div class="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                <i data-lucide="flame" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div class="mt-4 flex items-baseline justify-between">
+              <div class="flex items-baseline gap-2">
+                <span class="text-3xl font-bold font-mono tracking-tight text-rose-600 dark:text-rose-400">{{ stats.highPriority }}</span>
+                <span class="text-xs text-zinc-500">total</span>
+              </div>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 font-medium">
+                {{ stats.highPending }} belum selesai
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- PROGRESS & VISUAL BREAKDOWN SECTION -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Left 7 Cols: Overall Project Progress & Category Breakdown -->
+          <div class="lg:col-span-7 p-6 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 space-y-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-bold text-zinc-900 dark:text-zinc-100">Progres Penyelesaian Proyek</h3>
+                <p class="text-xs text-zinc-500 dark:text-zinc-400">Proporsi status seluruh tugas aktif di dalam workspace</p>
+              </div>
+              <span class="font-mono text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                {{ stats.completionRate }}% Complete
+              </span>
+            </div>
+
+            <!-- Multi-Segment Stacked Bar -->
+            <div class="space-y-2">
+              <div class="w-full h-3 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden flex p-0.5 gap-0.5">
+                <div
+                  v-if="stats.done > 0"
+                  class="h-full bg-emerald-500 rounded-l-full first:rounded-l-full last:rounded-r-full transition-all duration-500"
+                  :style="{ width: (stats.total ? (stats.done / stats.total) * 100 : 0) + '%' }"
+                  title="Done"
+                ></div>
+                <div
+                  v-if="stats.inProgress > 0"
+                  class="h-full bg-amber-500 first:rounded-l-full last:rounded-r-full transition-all duration-500"
+                  :style="{ width: (stats.total ? (stats.inProgress / stats.total) * 100 : 0) + '%' }"
+                  title="In Progress"
+                ></div>
+                <div
+                  v-if="stats.todo > 0"
+                  class="h-full bg-zinc-400 dark:bg-zinc-600 first:rounded-l-full last:rounded-r-full transition-all duration-500"
+                  :style="{ width: (stats.total ? (stats.todo / stats.total) * 100 : 0) + '%' }"
+                  title="Todo"
+                ></div>
+              </div>
+
+              <div class="grid grid-cols-3 gap-2 pt-2">
+                <div class="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200/60 dark:border-zinc-800/70">
+                  <div class="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>Done</span>
+                  </div>
+                  <p class="font-mono font-bold text-sm mt-1">{{ stats.done }} Tugas</p>
+                </div>
+                <div class="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200/60 dark:border-zinc-800/70">
+                  <div class="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span>In Progress</span>
+                  </div>
+                  <p class="font-mono font-bold text-sm mt-1">{{ stats.inProgress }} Tugas</p>
+                </div>
+                <div class="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200/60 dark:border-zinc-800/70">
+                  <div class="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                    <span class="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-500"></span>
+                    <span>Todo</span>
+                  </div>
+                  <p class="font-mono font-bold text-sm mt-1">{{ stats.todo }} Tugas</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Category / Tag Breakdown -->
+            <div class="pt-4 border-t border-zinc-200/70 dark:border-zinc-800/80 space-y-3">
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Distribusi Berdasarkan Kategori / Modul
+              </h4>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div
+                  v-for="cat in categoryBreakdown"
+                  :key="cat.tag"
+                  class="p-3 rounded-lg bg-zinc-50/70 dark:bg-zinc-950/40 border border-zinc-200/60 dark:border-zinc-800/60 space-y-1.5"
+                >
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ cat.tag }}</span>
+                    <span class="font-mono text-[11px] text-zinc-500">{{ cat.count }} tugas ({{ cat.percent }}%)</span>
+                  </div>
+                  <div class="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      class="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                      :style="{ width: cat.percent + '%' }"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right 5 Cols: Priority Distribution -->
+          <div class="lg:col-span-5 p-6 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 flex flex-col justify-between space-y-5">
+            <div class="space-y-4">
+              <div>
+                <h3 class="text-sm font-bold text-zinc-900 dark:text-zinc-100">Distribusi Prioritas Tugas</h3>
+                <p class="text-xs text-zinc-500 dark:text-zinc-400">Klasifikasi beban kerja menurut tingkat urgensi</p>
+              </div>
+
+              <div class="space-y-4 pt-1">
+                <!-- High Priority Bar -->
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-300">
+                      <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                      <span>High / Urgent Priority</span>
+                    </span>
+                    <span class="font-mono font-semibold text-rose-600 dark:text-rose-400">
+                      {{ stats.highPriority }} ({{ priorityPercent('high') }}%)
+                    </span>
+                  </div>
+                  <div class="w-full h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      class="h-full bg-rose-500 rounded-full transition-all duration-500"
+                      :style="{ width: priorityPercent('high') + '%' }"
+                    ></div>
+                  </div>
+                </div>
+
+                <!-- Medium Priority Bar -->
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-300">
+                      <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                      <span>Medium Priority</span>
+                    </span>
+                    <span class="font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                      {{ stats.mediumPriority }} ({{ priorityPercent('medium') }}%)
+                    </span>
+                  </div>
+                  <div class="w-full h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      class="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                      :style="{ width: priorityPercent('medium') + '%' }"
+                    ></div>
+                  </div>
+                </div>
+
+                <!-- Low Priority Bar -->
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-300">
+                      <span class="w-2 h-2 rounded-full bg-zinc-400"></span>
+                      <span>Low Priority</span>
+                    </span>
+                    <span class="font-mono font-semibold text-zinc-600 dark:text-zinc-400">
+                      {{ stats.lowPriority }} ({{ priorityPercent('low') }}%)
+                    </span>
+                  </div>
+                  <div class="w-full h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      class="h-full bg-zinc-400 dark:bg-zinc-500 rounded-full transition-all duration-500"
+                      :style="{ width: priorityPercent('low') + '%' }"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Insight Callout -->
+            <div class="p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-500/20 flex items-start gap-3">
+              <i data-lucide="sparkles" class="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5"></i>
+              <div class="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                <span class="font-semibold text-zinc-900 dark:text-white">Fokus Sprint:</span>
+                Terdapat <span class="font-mono font-bold text-rose-600 dark:text-rose-400">{{ stats.highPending }}</span> tugas berprioritas tinggi yang belum selesai. Prioritaskan eksekusi pada papan Kanban.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- UPCOMING DEADLINES & QUICK JUMP -->
+        <div class="p-6 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 class="text-sm font-bold text-zinc-900 dark:text-zinc-100">Tenggat Waktu Terdekat & Tugas Aktif</h3>
+              <p class="text-xs text-zinc-500 dark:text-zinc-400">Daftar tugas belum selesai yang diurutkan berdasarkan tenggat waktu paling mendesak</p>
+            </div>
+            <a
+              href="#/tasks"
+              class="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+            >
+              <span>Lihat Semua Tugas</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </a>
+          </div>
+
+          <div v-if="upcomingTasks.length === 0" class="py-8 text-center text-xs text-zinc-500">
+            Semua tugas telah selesai dikerjakan! 🎉
+          </div>
+
+          <div v-else class="divide-y divide-zinc-200/70 dark:divide-zinc-800/80">
+            <div
+              v-for="task in upcomingTasks"
+              :key="task.id"
+              class="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+            >
+              <div class="flex items-start sm:items-center gap-3 min-w-0">
+                <button
+                  @click="quickCompleteTask(task)"
+                  class="mt-0.5 sm:mt-0 w-4 h-4 rounded-full border border-zinc-300 dark:border-zinc-700 hover:border-emerald-500 dark:hover:border-emerald-400 flex items-center justify-center text-transparent hover:text-emerald-500 transition shrink-0"
+                  title="Tandai Selesai"
+                >
+                  <i data-lucide="check" class="w-2.5 h-2.5"></i>
+                </button>
+                <span class="font-mono text-xs text-zinc-400 dark:text-zinc-500 shrink-0">{{ task.id }}</span>
+                <div class="min-w-0">
+                  <p class="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                    {{ task.title }}
+                  </p>
+                  <div class="flex flex-wrap items-center gap-2 mt-1">
+                    <span :class="priorityBadgeClass(task.priority)" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide">
+                      {{ task.priority }}
+                    </span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                      {{ task.tag }}
+                    </span>
+                    <span :class="dueDateBadgeClass(task.dueDate, task.status)" class="flex items-center gap-1 text-[11px] font-mono">
+                      <i data-lucide="calendar" class="w-3 h-3"></i>
+                      <span>{{ formatDate(task.dueDate) }} ({{ getRelativeDueLabel(task.dueDate) }})</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+                <button
+                  @click="openEditModal(task)"
+                  class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-zinc-100 dark:bg-zinc-800/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition"
+                >
+                  Edit
+                </button>
+                <button
+                  @click="jumpToTaskInWorkspace(task)"
+                  class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition"
+                >
+                  <span>Buka di Board</span>
+                  <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- ==========================================
+           VIEW 2: WORKSPACE — KANBAN & LIST (#/tasks)
+      =========================================== -->
+      <main v-if="currentRoute === 'tasks'" class="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl w-full mx-auto flex flex-col space-y-5">
+        <!-- Header & View Switcher -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              Workspace Tasks
+            </h2>
+            <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Kelola alur kerja dengan Kanban Board interaktif atau List View terstruktur.
+            </p>
+          </div>
+
+          <!-- View Switcher Toggle (Kanban vs List) -->
+          <div class="flex items-center gap-2 self-start sm:self-auto">
+            <div class="inline-flex p-1 rounded-xl bg-zinc-200/70 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+              <button
+                @click="setViewMode('kanban')"
+                :class="viewMode === 'kanban'
+                  ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-2xs font-semibold'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'"
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition"
+              >
+                <i data-lucide="columns-3" class="w-3.5 h-3.5"></i>
+                <span>Kanban Board</span>
+              </button>
+              <button
+                @click="setViewMode('list')"
+                :class="viewMode === 'list'
+                  ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-2xs font-semibold'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'"
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition"
+              >
+                <i data-lucide="list-todo" class="w-3.5 h-3.5"></i>
+                <span>Table / List</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- FILTER & LIVE SEARCH BAR -->
+        <div class="p-3.5 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          <!-- Search Input -->
+          <div class="relative flex-1">
+            <i data-lucide="search" class="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+            <input
+              type="text"
+              v-model="filters.search"
+              placeholder="Cari ID tugas (TSK-...), judul, atau deskripsi..."
+              class="w-full pl-9 pr-8 py-2 text-xs rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-indigo-500 transition"
+            />
+            <button
+              v-if="filters.search"
+              @click="filters.search = ''"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+            >
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <!-- Multi-Criteria Dropdown Filters -->
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Status Filter -->
+            <div class="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-1.5">
+              <span class="text-[11px] text-zinc-400 font-medium">Status:</span>
+              <select
+                v-model="filters.status"
+                class="bg-transparent text-xs font-medium text-zinc-800 dark:text-zinc-200 focus:outline-none cursor-pointer"
+              >
+                <option value="all" class="bg-white dark:bg-zinc-900">Semua Status</option>
+                <option value="todo" class="bg-white dark:bg-zinc-900">Todo</option>
+                <option value="in_progress" class="bg-white dark:bg-zinc-900">In Progress</option>
+                <option value="done" class="bg-white dark:bg-zinc-900">Done</option>
+              </select>
+            </div>
+
+            <!-- Priority Filter -->
+            <div class="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-1.5">
+              <span class="text-[11px] text-zinc-400 font-medium">Prioritas:</span>
+              <select
+                v-model="filters.priority"
+                class="bg-transparent text-xs font-medium text-zinc-800 dark:text-zinc-200 focus:outline-none cursor-pointer"
+              >
+                <option value="all" class="bg-white dark:bg-zinc-900">Semua Prioritas</option>
+                <option value="high" class="bg-white dark:bg-zinc-900">High</option>
+                <option value="medium" class="bg-white dark:bg-zinc-900">Medium</option>
+                <option value="low" class="bg-white dark:bg-zinc-900">Low</option>
+              </select>
+            </div>
+
+            <!-- Reset Filter Button -->
+            <button
+              v-if="hasActiveFilters"
+              @click="resetFilters()"
+              class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition"
+            >
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+              <span>Reset</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- EMPTY STATE (Jika hasil pencarian/filter kosong) -->
+        <div
+          v-if="filteredTasks.length === 0"
+          class="my-auto py-16 px-4 rounded-xl bg-white dark:bg-zinc-900/60 border border-dashed border-zinc-300 dark:border-zinc-800 flex flex-col items-center justify-center text-center"
+        >
+          <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mb-3">
+            <i data-lucide="search-x" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-sm font-bold text-zinc-900 dark:text-zinc-100">Tidak Ada Tugas yang Ditemukan</h3>
+          <p class="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mt-1">
+            Kriteria pencarian atau filter Anda tidak cocok dengan tugas mana pun di dalam workspace saat ini.
+          </p>
+          <div class="flex items-center gap-2.5 mt-4">
+            <button
+              v-if="hasActiveFilters"
+              @click="resetFilters()"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition"
+            >
+              <i data-lucide="Filter-x" class="w-3.5 h-3.5"></i>
+              <span>Reset Filter</span>
+            </button>
+            <button
+              @click="openCreateModal()"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition"
+            >
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Buat Tugas Baru</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             SUB-VIEW 2A: KANBAN BOARD (3 COLUMNS)
+        =========================================== -->
+        <div
+          v-else-if="viewMode === 'kanban'"
+          class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start"
+        >
+          <div
+            v-for="col in kanbanColumns"
+            :key="col.key"
+            @dragover.prevent="dragOverCol = col.key"
+            @dragleave="dragOverCol = null"
+            @drop="onDropTask($event, col.key)"
+            :class="dragOverCol === col.key ? 'ring-2 ring-indigo-500/60 bg-indigo-50/20 dark:bg-indigo-950/20' : 'bg-zinc-100/70 dark:bg-zinc-900/50'"
+            class="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 p-3.5 flex flex-col min-h-[480px] transition-all"
+          >
+            <!-- Column Header -->
+            <div class="flex items-center justify-between px-1 pb-3 mb-3 border-b border-zinc-200/70 dark:border-zinc-800/80">
+              <div class="flex items-center gap-2">
+                <span :class="col.dotClass" class="w-2.5 h-2.5 rounded-full"></span>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-200">
+                  {{ col.label }}
+                </h3>
+                <span class="px-1.5 py-0.5 text-[11px] font-mono font-semibold rounded bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                  {{ tasksByStatus(col.key).length }}
+                </span>
+              </div>
+              <button
+                @click="openCreateModal(col.key)"
+                class="p-1 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition"
+                :title="'Tambah tugas ke ' + col.label"
+              >
+                <i data-lucide="plus" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <!-- Column Cards List -->
+            <div class="space-y-3 flex-1">
+              <div
+                v-for="task in tasksByStatus(col.key)"
+                :key="task.id"
+                draggable="true"
+                @dragstart="onDragStart($event, task)"
+                @dragend="onDragEnd()"
+                class="group p-4 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/90 dark:border-zinc-800 hover:border-indigo-500/50 dark:hover:border-indigo-500/50 shadow-2xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing flex flex-col justify-between gap-3"
+              >
+                <div class="space-y-2">
+                  <!-- Top Row: ID, Tag & Priority Badge -->
+                  <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-mono text-[11px] font-semibold text-zinc-400 dark:text-zinc-500">
+                        {{ task.id }}
+                      </span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                        {{ task.tag }}
+                      </span>
+                    </div>
+                    <span :class="priorityBadgeClass(task.priority)" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider">
+                      {{ task.priority }}
+                    </span>
+                  </div>
+
+                  <!-- Task Title -->
+                  <h4
+                    :class="task.status === 'done' ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'"
+                    class="text-sm font-semibold leading-snug"
+                  >
+                    {{ task.title }}
+                  </h4>
+
+                  <!-- Task Description -->
+                  <p class="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
+                    {{ task.description }}
+                  </p>
+                </div>
+
+                <!-- Card Footer: Due Date & Quick Actions -->
+                <div class="pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between gap-2">
+                  <div :class="dueDateBadgeClass(task.dueDate, task.status)" class="flex items-center gap-1 text-[11px] font-mono">
+                    <i data-lucide="calendar" class="w-3 h-3"></i>
+                    <span>{{ formatDate(task.dueDate) }}</span>
+                  </div>
+
+                  <div class="flex items-center gap-1">
+                    <!-- Quick Move Status Button -->
+                    <button
+                      @click="advanceTaskStatus(task)"
+                      class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition"
+                      :title="nextStageLabel(task.status)"
+                    >
+                      <span>{{ nextStageShortLabel(task.status) }}</span>
+                      <i data-lucide="arrow-right-circle" class="w-3 h-3"></i>
+                    </button>
+
+                    <!-- Edit Button -->
+                    <button
+                      @click="openEditModal(task)"
+                      class="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                      title="Edit Tugas"
+                    >
+                      <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                    </button>
+
+                    <!-- Delete Button -->
+                    <button
+                      @click="confirmDeleteTask(task)"
+                      class="p-1.5 rounded-md text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
+                      title="Hapus Tugas"
+                    >
+                      <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Empty Column Placeholder -->
+              <div
+                v-if="tasksByStatus(col.key).length === 0"
+                class="h-40 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center text-center p-4"
+              >
+                <p class="text-xs text-zinc-400 dark:text-zinc-500">Belum ada tugas di kolom {{ col.label }}</p>
+                <button
+                  @click="openCreateModal(col.key)"
+                  class="mt-2 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  + Tambah ke {{ col.label }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             SUB-VIEW 2B: TABLE / LIST VIEW
+        =========================================== -->
+        <div
+          v-else
+          class="rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 overflow-hidden shadow-2xs"
+        >
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/50 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  <th class="py-3 px-4">ID & Tugas</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4">Prioritas</th>
+                  <th class="py-3 px-4">Kategori</th>
+                  <th class="py-3 px-4">Tenggat Waktu</th>
+                  <th class="py-3 px-4 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-zinc-200/60 dark:divide-zinc-800/70 text-xs">
+                <tr
+                  v-for="task in filteredTasks"
+                  :key="task.id"
+                  class="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition group"
+                >
+                  <!-- ID & Title -->
+                  <td class="py-3.5 px-4 max-w-md">
+                    <div class="flex items-start gap-2.5">
+                      <span class="font-mono text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 shrink-0">{{ task.id }}</span>
+                      <div class="min-w-0">
+                        <p
+                          :class="task.status === 'done' ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'"
+                          class="font-semibold truncate"
+                        >
+                          {{ task.title }}
+                        </p>
+                        <p class="text-[11px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
+                          {{ task.description }}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+
+                  <!-- Interactive Status Dropdown -->
+                  <td class="py-3.5 px-4 whitespace-nowrap">
+                    <select
+                      :value="task.status"
+                      @change="updateTaskStatus(task, $event.target.value)"
+                      :class="statusSelectClass(task.status)"
+                      class="px-2.5 py-1 rounded-md text-[11px] font-semibold border cursor-pointer focus:outline-none"
+                    >
+                      <option value="todo" class="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">Todo</option>
+                      <option value="in_progress" class="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">In Progress</option>
+                      <option value="done" class="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">Done</option>
+                    </select>
+                  </td>
+
+                  <!-- Priority -->
+                  <td class="py-3.5 px-4 whitespace-nowrap">
+                    <span :class="priorityBadgeClass(task.priority)" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider">
+                      {{ task.priority }}
+                    </span>
+                  </td>
+
+                  <!-- Tag -->
+                  <td class="py-3.5 px-4 whitespace-nowrap">
+                    <span class="px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                      {{ task.tag }}
+                    </span>
+                  </td>
+
+                  <!-- Due Date -->
+                  <td class="py-3.5 px-4 whitespace-nowrap">
+                    <span :class="dueDateBadgeClass(task.dueDate, task.status)" class="font-mono text-[11px] flex items-center gap-1">
+                      <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                      <span>{{ formatDate(task.dueDate) }}</span>
+                    </span>
+                  </td>
+
+                  <!-- Actions -->
+                  <td class="py-3.5 px-4 whitespace-nowrap text-right">
+                    <div class="inline-flex items-center gap-1">
+                      <button
+                        @click="advanceTaskStatus(task)"
+                        class="px-2 py-1 rounded text-[11px] font-medium bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition"
+                        :title="nextStageLabel(task.status)"
+                      >
+                        {{ nextStageShortLabel(task.status) }}
+                      </button>
+                      <button
+                        @click="openEditModal(task)"
+                        class="p-1.5 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                        title="Edit"
+                      >
+                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                      </button>
+                      <button
+                        @click="confirmDeleteTask(task)"
+                        class="p-1.5 rounded text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
+                        title="Hapus"
+                      >
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+
+      <!-- ==========================================
+           VIEW 3: SETTINGS & PREFERENCES (#/settings)
+      =========================================== -->
+      <main v-if="currentRoute === 'settings'" class="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-4xl w-full mx-auto space-y-6">
+        <div>
+          <h2 class="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Settings & Workspace Preferences
+          </h2>
+          <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Konfigurasi identitas profil, tema antarmuka, dan manajemen cadangan data lokal Anda.
+          </p>
+        </div>
+
+        <!-- 1. PROFIL PENGGUNA (Real-time Reactive) -->
+        <section class="p-6 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 space-y-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-200/70 dark:border-zinc-800">
+            <div>
+              <h3 class="text-sm font-bold text-zinc-900 dark:text-zinc-100">Profil Pengguna & Workspace</h3>
+              <p class="text-xs text-zinc-500 dark:text-zinc-400">Perubahan langsung tersimpan otomatis dan diperbarui di seluruh aplikasi.</p>
+            </div>
+            <!-- Live Preview Badge -->
+            <div class="flex items-center gap-3 px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/80 dark:border-zinc-800">
+              <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 text-white font-bold text-xs flex items-center justify-center uppercase">
+                {{ profile.initials || 'AR' }}
+              </div>
+              <div class="text-xs">
+                <p class="font-bold text-zinc-900 dark:text-zinc-100">{{ profile.name || 'Pengguna' }}</p>
+                <p class="text-zinc-500 dark:text-zinc-400">{{ profile.role || 'Member' }}</p>
+              </div>
+            </div>
+          </div>
+
+          <form @submit.prevent="saveProfilePreferences()" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                Nama Lengkap Pengguna
+              </label>
+              <input
+                type="text"
+                v-model="profile.name"
+                @input="persistState()"
+                placeholder="Contoh: Arya Wijaya"
+                class="w-full px-3 py-2 rounded-lg text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                Role / Jabatan
+              </label>
+              <input
+                type="text"
+                v-model="profile.role"
+                @input="persistState()"
+                placeholder="Contoh: Principal Product Engineer"
+                class="w-full px-3 py-2 rounded-lg text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                Inisial Avatar (Maks 2 Karakter)
+              </label>
+              <input
+                type="text"
+                maxlength="2"
+                v-model="profile.initials"
+                @input="profile.initials = profile.initials.toUpperCase(); persistState()"
+                placeholder="AW"
+                class="w-full px-3 py-2 rounded-lg text-xs font-mono uppercase bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                Nama Workspace
+              </label>
+              <input
+                type="text"
+                v-model="profile.workspaceName"
+                @input="persistState()"
+                placeholder="Veloce Cloud"
+                class="w-full px-3 py-2 rounded-lg text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div class="sm:col-span-2 flex justify-end pt-2">
+              <button
+                type="submit"
+                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition"
+              >
+                <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                <span>Konfirmasi Perubahan Profil</span>
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <!-- 2. TEMA TAMPILAN (Dark Mode / Light Mode) -->
+        <section class="p-6 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 space-y-4">
+          <div>
+            <h3 class="text-sm font-bold text-zinc-900 dark:text-zinc-100">Preferensi Tampilan (Theme)</h3>
+            <p class="text-xs text-zinc-500 dark:text-zinc-400">Pilih skema warna antarmuka yang paling nyaman untuk mata Anda.</p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Light Mode Card -->
+            <button
+              type="button"
+              @click="setTheme('light')"
+              :class="theme === 'light'
+                ? 'border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/30'
+                : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'"
+              class="p-4 rounded-xl border text-left flex items-center justify-between transition"
+            >
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                  <i data-lucide="sun" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="text-xs font-bold text-zinc-900 dark:text-zinc-100">Light Mode</p>
+                  <p class="text-[11px] text-zinc-500">Latar cerah bersih (#FAFAFA)</p>
+                </div>
+              </div>
+              <span
+                v-if="theme === 'light'"
+                class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-indigo-600 text-white"
+              >
+                Aktif
+              </span>
+            </button>
+
+            <!-- Dark Mode Card -->
+            <button
+              type="button"
+              @click="setTheme('dark')"
+              :class="theme === 'dark'
+                ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-500/5'
+                : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'"
+              class="p-4 rounded-xl border text-left flex items-center justify-between transition"
+            >
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                  <i data-lucide="moon" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="text-xs font-bold text-zinc-900 dark:text-zinc-100">Dark Mode</p>
+                  <p class="text-[11px] text-zinc-500">Kontras tinggi karbon (#09090B)</p>
+                </div>
+              </div>
+              <span
+                v-if="theme === 'dark'"
+                class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-indigo-500 text-white"
+              >
+                Aktif
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <!-- 3. MANAJEMEN DATA (Export JSON & Reset Default) -->
+        <section class="p-6 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/90 space-y-4">
+          <div>
+            <h3 class="text-sm font-bold text-zinc-900 dark:text-zinc-100">Manajemen Data & Pencadangan</h3>
+            <p class="text-xs text-zinc-500 dark:text-zinc-400">
+              Unduh salinan data workspace dalam format JSON atau kembalikan ke 8 tugas demonstrasi awal.
+            </p>
+          </div>
+
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950/70 border border-zinc-200/70 dark:border-zinc-800">
+            <div class="space-y-0.5">
+              <p class="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Status Penyimpanan Lokal</p>
+              <p class="text-[11px] font-mono text-zinc-500">
+                {{ stats.total }} tugas tersimpan • Kunci: <code class="text-indigo-500">veloce_saas_store_v1</code>
+              </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                @click="exportJSON()"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition"
+              >
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                <span>Export JSON</span>
+              </button>
+
+              <button
+                type="button"
+                @click="openResetConfirm()"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition"
+              >
+                <i data-lucide="refresh-ccw" class="w-3.5 h-3.5"></i>
+                <span>Reset to Default Data</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- ==========================================
+         MOBILE BOTTOM NAVIGATION BAR
+    =========================================== -->
+    <nav class="lg:hidden fixed bottom-0 inset-x-0 z-30 h-16 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-t border-zinc-200 dark:border-zinc-800 grid grid-cols-3">
+      <a
+        href="#/dashboard"
+        :class="currentRoute === 'dashboard' ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-zinc-500 dark:text-zinc-400'"
+        class="flex flex-col items-center justify-center gap-1 text-[11px]"
+      >
+        <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+        <span>Dashboard</span>
+      </a>
+      <a
+        href="#/tasks"
+        :class="currentRoute === 'tasks' ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-zinc-500 dark:text-zinc-400'"
+        class="flex flex-col items-center justify-center gap-1 text-[11px]"
+      >
+        <i data-lucide="kanban" class="w-4 h-4"></i>
+        <span>Tasks ({{ stats.total }})</span>
+      </a>
+      <a
+        href="#/settings"
+        :class="currentRoute === 'settings' ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-zinc-500 dark:text-zinc-400'"
+        class="flex flex-col items-center justify-center gap-1 text-[11px]"
+      >
+        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+        <span>Settings</span>
+      </a>
+    </nav>
+
+    <!-- ==========================================
+         MODAL CRUD TUGAS (TAMBAH & EDIT)
+    =========================================== -->
+    <div
+      v-if="taskModal.open"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    >
+      <!-- Backdrop -->
+      <div
+        @click="closeTaskModal()"
+        class="fixed inset-0 bg-black/60 backdrop-blur-xs"
+      ></div>
+
+      <!-- Modal Box -->
+      <div class="relative z-10 w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden animate-modal">
+        <div class="px-6 py-4 border-b border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+            <h3 class="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+              {{ taskModal.isEdit ? 'Edit Tugas ' + taskModal.form.id : 'Buat Tugas Baru' }}
+            </h3>
+          </div>
+          <button
+            @click="closeTaskModal()"
+            class="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+          >
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <form @submit.prevent="submitTaskForm()" class="p-6 space-y-4">
+          <!-- Judul Tugas -->
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+              Judul Tugas <span class="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              v-model="taskModal.form.title"
+              placeholder="Contoh: Implementasi OAuth2 PKCE Flow di API Gateway"
+              class="w-full px-3 py-2 rounded-lg text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <!-- Deskripsi -->
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+              Deskripsi Teknis / Catatan
+            </label>
+            <textarea
+              rows="3"
+              v-model="taskModal.form.description"
+              placeholder="Jelaskan spesifikasi, kriteria penerimaan, atau detail pekerjaan..."
+              class="w-full px-3 py-2 rounded-lg text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-indigo-500 resize-none"
+            ></textarea>
+          </div>
+
+          <!-- Grid 2x2: Status, Prioritas, Tag, Due Date -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                Status Tahapan
+              </label>
+              <select
+                v-model="taskModal.form.status"
+                class="w-full px-3 py-2 rounded-lg text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="todo">Todo (Antrean)</option>
+                <option value="in_progress">In Progress (Dikerjakan)</option>
+                <option value="done">Done (Selesai)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                Tingkat Prioritas
+              </label>
+              <select
+                v-model="taskModal.form.priority"
+                class="w-full px-3 py-2 rounded-lg text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="low">Low (Rendah)</option>
+                <option value="medium">Medium (Menengah)</option>
+                <option value="high">High (Tinggi / Mendesak)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                Tag / Kategori Proyek
+              </label>
+              <select
+                v-model="taskModal.form.tag"
+                class="w-full px-3 py-2 rounded-lg text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="Frontend">Frontend</option>
+                <option value="Backend">Backend</option>
+                <option value="UI/UX">UI/UX Design</option>
+                <option value="DevOps">DevOps & Infra</option>
+                <option value="Security">Security</option>
+                <option value="Product">Product Strategy</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                Tenggat Waktu (Due Date) <span class="text-rose-500">*</span>
+              </label>
+              <input
+                type="date"
+                required
+                v-model="taskModal.form.dueDate"
+                class="w-full px-3 py-2 rounded-lg text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-zinc-200/80 dark:border-zinc-800 flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              @click="closeTaskModal()"
+              class="px-4 py-2 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+            >
+              Batal (Esc)
+            </button>
+            <button
+              type="submit"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition"
+            >
+              <i data-lucide="save" class="w-3.5 h-3.5"></i>
+              <span>{{ taskModal.isEdit ? 'Simpan Perubahan' : 'Buat Tugas' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ==========================================
+         MODAL KONFIRMASI (HAPUS TUGAS / RESET DATA)
+    =========================================== -->
+    <div
+      v-if="confirmDialog.open"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    >
+      <div
+        @click="closeConfirmDialog()"
+        class="fixed inset-0 bg-black/60 backdrop-blur-xs"
+      ></div>
+
+      <div class="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 shadow-2xl animate-modal space-y-4">
+        <div class="flex items-start gap-3.5">
+          <div class="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-zinc-900 dark:text-zinc-100">{{ confirmDialog.title }}</h3>
+            <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
+              {{ confirmDialog.message }}
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button
+            type="button"
+            @click="closeConfirmDialog()"
+            class="px-3.5 py-2 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            @click="executeConfirmAction()"
+            class="px-4 py-2 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition shadow-xs"
+          >
+            {{ confirmDialog.confirmText }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+         FLOATING TOAST NOTIFICATIONS (BOTTOM-RIGHT)
+    =========================================== -->
+    <div class="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+      <div
+        v-for="toast in toasts"
+        :key="toast.id"
+        class="pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xl border border-zinc-700/80 dark:border-zinc-300 animate-toast"
+      >
+        <div class="flex items-center gap-2.5 text-xs font-medium">
+          <span
+            :class="{
+              'text-emerald-400 dark:text-emerald-600': toast.type === 'success',
+              'text-rose-400 dark:text-rose-600': toast.type === 'danger',
+              'text-indigo-400 dark:text-indigo-600': toast.type === 'info'
+            }"
+          >
+            <i v-if="toast.type === 'success'" data-lucide="check-circle-2" class="w-4 h-4"></i>
+            <i v-else-if="toast.type === 'danger'" data-lucide="trash-2" class="w-4 h-4"></i>
+            <i v-else data-lucide="sparkles" class="w-4 h-4"></i>
+          </span>
+          <span>{{ toast.message }}</span>
+        </div>
+        <button
+          @click="removeToast(toast.id)"
+          class="text-zinc-400 hover:text-white dark:hover:text-zinc-900"
+        >
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==========================================
+       APPLICATION LOGIC & REACTIVE STORE
+  =========================================== -->
+  <script>
+    const STORAGE_KEY = 'veloce_saas_store_v1';
+
+    /**
+     * Helper pembuat tanggal relatif terhadap hari ini (YYYY-MM-DD)
+     * agar data awal selalu memiliki variasi tenggat waktu yang realistis
+     */
+    function getRelativeDate(offsetDays) {
+      const d = new Date();
+      d.setDate(d.getDate() + offsetDays);
+      return d.toISOString().split('T')[0];
+    }
+
+    /**
+     * 8 Realistic Mock Tasks awal
+     */
+    function getDefaultTasks() {
+      return [
+        {
+          id: 'TSK-101',
+          title: 'Arsitektur State & Sinkronisasi Real-Time WebSockets',
+          description: 'Mengimplementasikan koneksi multiplexing WebSocket untuk pembaruan status kartu Kanban lintas tab tanpa reload.',
+          status: 'in_progress',
+          priority: 'high',
+          tag: 'Frontend',
+          dueDate: getRelativeDate(1)
+        },
+        {
+          id: 'TSK-102',
+          title: 'Audit Keamanan Endpoint Autentikasi & Rate Limiting',
+          description: 'Menambahkan proteksi token bucket pada endpoint login dan rotasi refresh token otomatis berbasis Redis.',
+          status: 'todo',
+          priority: 'high',
+          tag: 'Security',
+          dueDate: getRelativeDate(2)
+        },
+        {
+          id: 'TSK-103',
+          title: 'Refaktor Sistem Desain Komponen Tabel Linear-Style',
+          description: 'Menyempurnakan kepadatan baris, tipografi monospace pada ID, dan navigasi akselerasi keyboard.',
+          status: 'done',
+          priority: 'medium',
+          tag: 'UI/UX',
+          dueDate: getRelativeDate(-2)
+        },
+        {
+          id: 'TSK-104',
+          title: 'Optimasi Query Agregasi PostgreSQL pada Dashboard Analitik',
+          description: 'Membuat materialized view dan composite index untuk memangkas waktu muat metrik KPI hingga di bawah 45ms.',
+          status: 'in_progress',
+          priority: 'high',
+          tag: 'Backend',
+          dueDate: getRelativeDate(0)
+        },
+        {
+          id: 'TSK-105',
+          title: 'Otomatisasi Pipeline CI/CD Zero-Downtime Deployment',
+          description: 'Mengonfigurasi GitHub Actions dengan strategi blue-green container rollout dan healthcheck otomatis.',
+          status: 'todo',
+          priority: 'medium',
+          tag: 'DevOps',
+          dueDate: getRelativeDate(4)
+        },
+        {
+          id: 'TSK-106',
+          title: 'Penyusunan Dokumen Spesifikasi Q4 Product Roadmap',
+          description: 'Menyelaraskan prioritas fitur enterprise SSO, audit log, dan ekspor laporan CSV bersama seluruh stakeholder.',
+          status: 'done',
+          priority: 'low',
+          tag: 'Product',
+          dueDate: getRelativeDate(-4)
+        },
+        {
+          id: 'TSK-107',
+          title: 'Implementasi Fitur Command Palette & Shortcut Global',
+          description: 'Mendukung pemicu cepat tombol N untuk pembuatan tugas baru dan Esc untuk menutup dialog aktif.',
+          status: 'done',
+          priority: 'medium',
+          tag: 'Frontend',
+          dueDate: getRelativeDate(-1)
+        },
+        {
+          id: 'TSK-108',
+          title: 'Migrasi Penyimpanan Berkas Lampiran ke Edge Object Storage',
+          description: 'Mengalihkan unggahan aset pengguna menggunakan pre-signed URL langsung ke bucket S3-compatible.',
+          status: 'todo',
+          priority: 'low',
+          tag: 'Backend',
+          dueDate: getRelativeDate(6)
+        }
+      ];
+    }
+
+    function getDefaultProfile() {
+      return {
+        name: 'Nadya Paramitha',
+        role: 'Lead Frontend Architect',
+        initials: 'NP',
+        workspaceName: 'Veloce Cloud'
+      };
+    }
+
+    const VALID_ROUTES = ['dashboard', 'tasks', 'settings'];
+
+    PetiteVue.createApp({
+      // --- REACTIVE STATE ---
+      currentRoute: 'dashboard',
+      viewMode: 'kanban',
+      theme: 'dark',
+      mobileMenuOpen: false,
+      draggedTaskId: null,
+      dragOverCol: null,
+
+      profile: getDefaultProfile(),
+      tasks: [],
+
+      filters: {
+        search: '',
+        status: 'all',
+        priority: 'all'
+      },
+
+      kanbanColumns: [
+        { key: 'todo', label: 'Todo', dotClass: 'bg-zinc-400 dark:bg-zinc-500' },
+        { key: 'in_progress', label: 'In Progress', dotClass: 'bg-amber-500' },
+        { key: 'done', label: 'Done', dotClass: 'bg-emerald-500' }
+      ],
+
+      taskModal: {
+        open: false,
+        isEdit: false,
+        form: {
+          id: '',
+          title: '',
+          description: '',
+          status: 'todo',
+          priority: 'medium',
+          tag: 'Frontend',
+          dueDate: getRelativeDate(2)
+        }
+      },
+
+      confirmDialog: {
+        open: false,
+        title: '',
+        message: '',
+        confirmText: 'Konfirmasi',
+        onConfirm: null
+      },
+
+      toasts: [],
+
+      // --- COMPUTED GETTERS ---
+      get stats() {
+        const total = this.tasks.length;
+        const done = this.tasks.filter(t => t.status === 'done').length;
+        const inProgress = this.tasks.filter(t => t.status === 'in_progress').length;
+        const todo = this.tasks.filter(t => t.status === 'todo').length;
+        const completionRate = total > 0 ? Math.round((done / total) * 100) : 0;
+
+        const highPriority = this.tasks.filter(t => t.priority === 'high').length;
+        const mediumPriority = this.tasks.filter(t => t.priority === 'medium').length;
+        const lowPriority = this.tasks.filter(t => t.priority === 'low').length;
+        const highPending = this.tasks.filter(t => t.priority === 'high' && t.status !== 'done').length;
+
+        return {
+          total,
+          done,
+          inProgress,
+          todo,
+          completionRate,
+          highPriority,
+          mediumPriority,
+          lowPriority,
+          highPending
+        };
+      },
+
+      get categoryBreakdown() {
+        const counts = {};
+        const total = this.tasks.length || 1;
+        this.tasks.forEach(t => {
+          counts[t.tag] = (counts[t.tag] || 0) + 1;
+        });
+        return Object.keys(counts)
+          .map(tag => ({
+            tag,
+            count: counts[tag],
+            percent: Math.round((counts[tag] / total) * 100)
+          }))
+          .sort((a, b) => b.count - a.count);
+      },
+
+      get upcomingTasks() {
+        return this.tasks
+          .filter(t => t.status !== 'done')
+          .slice()
+          .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+          .slice(0, 5);
+      },
+
+      get filteredTasks() {
+        const q = this.filters.search.trim().toLowerCase();
+        return this.tasks.filter(task => {
+          const matchSearch =
+            !q ||
+            task.title.toLowerCase().includes(q) ||
+            task.description.toLowerCase().includes(q) ||
+            task.id.toLowerCase().includes(q) ||
+            task.tag.toLowerCase().includes(q);
+
+          const matchStatus =
+            this.filters.status === 'all' || task.status === this.filters.status;
+
+          const matchPriority =
+            this.filters.priority === 'all' || task.priority === this.filters.priority;
+
+          return matchSearch && matchStatus && matchPriority;
+        });
+      },
+
+      get hasActiveFilters() {
+        return (
+          this.filters.search.trim() !== '' ||
+          this.filters.status !== 'all' ||
+          this.filters.priority !== 'all'
+        );
+      },
+
+      // --- LIFECYCLE & INITIALIZATION ---
+      init() {
+        this.loadFromStorage();
+        this.applyThemeToDOM();
+        this.syncRouteFromHash();
+
+        window.addEventListener('hashchange', () => {
+          this.syncRouteFromHash();
+        });
+
+        // Global Keyboard Shortcuts (N = New Task, Esc = Close Modal)
+        window.addEventListener('keydown', (e) => {
+          const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+          const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
+
+          if (e.key === 'Escape') {
+            if (this.taskModal.open) this.closeTaskModal();
+            if (this.confirmDialog.open) this.closeConfirmDialog();
+            if (this.mobileMenuOpen) this.mobileMenuOpen = false;
+          }
+
+          if (!isInput && (e.key === 'n' || e.key === 'N') && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            this.openCreateModal();
+          }
+        });
+
+        this.refreshIcons();
+      },
+
+      // --- ROUTING ENGINE ---
+      syncRouteFromHash() {
+        const rawHash = window.location.hash || '#/dashboard';
+        const cleaned = rawHash.replace(/^#\/?/, '').split('?')[0].toLowerCase();
+
+        if (VALID_ROUTES.includes(cleaned)) {
+          this.currentRoute = cleaned;
+        } else {
+          this.currentRoute = 'dashboard';
+          window.location.hash = '#/dashboard';
+        }
+        this.refreshIcons();
+      },
+
+      // --- STORAGE PERSISTENCE ---
+      loadFromStorage() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) {
+            this.tasks = getDefaultTasks();
+            this.profile = getDefaultProfile();
+            this.theme = 'dark';
+            this.viewMode = 'kanban';
+            this.persistState();
+            return;
+          }
+
+          const parsed = JSON.parse(raw);
+          this.tasks = Array.isArray(parsed.tasks) && parsed.tasks.length > 0
+            ? parsed.tasks
+            : getDefaultTasks();
+          this.profile = parsed.profile ? { ...getDefaultProfile(), ...parsed.profile } : getDefaultProfile();
+          this.theme = parsed.theme === 'light' ? 'light' : 'dark';
+          this.viewMode = parsed.viewMode === 'list' ? 'list' : 'kanban';
+        } catch (err) {
+          console.error('Gagal memuat state dari localStorage:', err);
+          this.tasks = getDefaultTasks();
+        }
+      },
+
+      persistState() {
+        try {
+          const payload = {
+            tasks: this.tasks,
+            profile: this.profile,
+            theme: this.theme,
+            viewMode: this.viewMode
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        } catch (err) {
+          console.error('Gagal menyimpan state ke localStorage:', err);
+        }
+      },
+
+      // --- ICON RE-RENDERING ---
+      refreshIcons() {
+        // Membaca dependensi state utama agar v-effect otomatis terpanggil saat state berubah
+        const _deps = [
+          this.currentRoute,
+          this.viewMode,
+          this.theme,
+          this.tasks.length,
+          this.filteredTasks.length,
+          this.taskModal.open,
+          this.confirmDialog.open,
+          this.mobileMenuOpen,
+          this.toasts.length
+        ];
+        setTimeout(() => {
+          if (window.lucide) {
+            window.lucide.createIcons();
+          }
+        }, 15);
+      },
+
+      // --- THEME MANAGEMENT ---
+      applyThemeToDOM() {
+        const htmlEl = document.documentElement;
+        if (this.theme === 'dark') {
+          htmlEl.classList.add('dark');
+        } else {
+          htmlEl.classList.remove('dark');
+        }
+      },
+
+      toggleTheme() {
+        this.setTheme(this.theme === 'dark' ? 'light' : 'dark');
+      },
+
+      setTheme(newTheme) {
+        this.theme = newTheme;
+        this.applyThemeToDOM();
+        this.persistState();
+        this.showToast(`Tema diubah ke ${newTheme === 'dark' ? 'Dark Mode' : 'Light Mode'}`, 'info');
+      },
+
+      setViewMode(mode) {
+        this.viewMode = mode;
+        this.persistState();
+        this.refreshIcons();
+      },
+
+      // --- TASK CRUD & WORKFLOW METHODS ---
+      tasksByStatus(statusKey) {
+        return this.filteredTasks.filter(t => t.status === statusKey);
+      },
+
+      generateTaskId() {
+        const numbers = this.tasks
+          .map(t => parseInt((t.id || '').replace(/\D/g, ''), 10))
+          .filter(n => !isNaN(n));
+        const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 101;
+        return `TSK-${nextNum}`;
+      },
+
+      openCreateModal(defaultStatus = 'todo') {
+        this.taskModal.isEdit = false;
+        this.taskModal.form = {
+          id: '',
+          title: '',
+          description: '',
+          status: typeof defaultStatus === 'string' ? defaultStatus : 'todo',
+          priority: 'medium',
+          tag: 'Frontend',
+          dueDate: getRelativeDate(3)
+        };
+        this.taskModal.open = true;
+        this.refreshIcons();
+      },
+
+      openEditModal(task) {
+        this.taskModal.isEdit = true;
+        this.taskModal.form = { ...task };
+        this.taskModal.open = true;
+        this.refreshIcons();
+      },
+
+      closeTaskModal() {
+        this.taskModal.open = false;
+        this.refreshIcons();
+      },
+
+      submitTaskForm() {
+        const f = this.taskModal.form;
+        if (!f.title.trim()) return;
+
+        if (this.taskModal.isEdit) {
+          const idx = this.tasks.findIndex(t => t.id === f.id);
+          if (idx !== -1) {
+            this.tasks.splice(idx, 1, {
+              ...f,
+              title: f.title.trim(),
+              description: f.description.trim() || 'Tidak ada catatan tambahan.'
+            });
+            this.showToast(`Tugas ${f.id} berhasil diperbarui`, 'success');
+          }
+        } else {
+          const newId = this.generateTaskId();
+          this.tasks.unshift({
+            id: newId,
+            title: f.title.trim(),
+            description: f.description.trim() || 'Tidak ada catatan tambahan.',
+            status: f.status,
+            priority: f.priority,
+            tag: f.tag,
+            dueDate: f.dueDate
+          });
+          this.showToast(`Tugas baru ${newId} berhasil ditambahkan`, 'success');
+        }
+
+        this.persistState();
+        this.closeTaskModal();
+      },
+
+      advanceTaskStatus(task) {
+        const order = ['todo', 'in_progress', 'done'];
+        const currentIdx = order.indexOf(task.status);
+        const nextStatus = order[(currentIdx + 1) % order.length];
+        task.status = nextStatus;
+        this.persistState();
+
+        const labels = { todo: 'Todo', in_progress: 'In Progress', done: 'Done' };
+        this.showToast(`${task.id} dipindahkan ke ${labels[nextStatus]}`, 'info');
+        this.refreshIcons();
+      },
+
+      updateTaskStatus(task, newStatus) {
+        task.status = newStatus;
+        this.persistState();
+        const labels = { todo: 'Todo', in_progress: 'In Progress', done: 'Done' };
+        this.showToast(`Status ${task.id} diubah ke ${labels[newStatus]}`, 'info');
+        this.refreshIcons();
+      },
+
+      quickCompleteTask(task) {
+        task.status = 'done';
+        this.persistState();
+        this.showToast(`Tugas ${task.id} ditandai selesai!`, 'success');
+        this.refreshIcons();
+      },
+
+      jumpToTaskInWorkspace(task) {
+        this.filters.search = task.id;
+        this.filters.status = 'all';
+        this.filters.priority = 'all';
+        window.location.hash = '#/tasks';
+      },
+
+      // --- DRAG AND DROP KANBAN ---
+      onDragStart(event, task) {
+        this.draggedTaskId = task.id;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', task.id);
+      },
+
+      onDragEnd() {
+        this.draggedTaskId = null;
+        this.dragOverCol = null;
+      },
+
+      onDropTask(event, targetStatus) {
+        const taskId = event.dataTransfer.getData('text/plain') || this.draggedTaskId;
+        this.dragOverCol = null;
+        this.draggedTaskId = null;
+
+        if (!taskId) return;
+        const task = this.tasks.find(t => t.id === taskId);
+        if (task && task.status !== targetStatus) {
+          task.status = targetStatus;
+          this.persistState();
+          const labels = { todo: 'Todo', in_progress: 'In Progress', done: 'Done' };
+          this.showToast(`${task.id} dipindahkan ke kolom ${labels[targetStatus]}`, 'info');
+          this.refreshIcons();
+        }
+      },
+
+      // --- CONFIRMATION DIALOGS (DELETE & RESET) ---
+      confirmDeleteTask(task) {
+        this.confirmDialog = {
+          open: true,
+          title: `Hapus Tugas ${task.id}?`,
+          message: `Apakah Anda yakin ingin menghapus "${task.title}"? Tindakan ini tidak dapat dibatalkan.`,
+          confirmText: 'Ya, Hapus Tugas',
+          onConfirm: () => {
+            this.tasks = this.tasks.filter(t => t.id !== task.id);
+            this.persistState();
+            this.showToast(`Tugas ${task.id} telah dihapus`, 'danger');
+          }
+        };
+        this.refreshIcons();
+      },
+
+      openResetConfirm() {
+        this.confirmDialog = {
+          open: true,
+          title: 'Reset ke Data Default?',
+          message: 'Seluruh perubahan tugas dan profil kustom Anda akan dikembalikan ke 8 data demonstrasi awal.',
+          confirmText: 'Reset Workspace',
+          onConfirm: () => {
+            this.tasks = getDefaultTasks();
+            this.profile = getDefaultProfile();
+            this.resetFilters();
+            this.persistState();
+            this.showToast('Workspace berhasil direset ke data awal', 'info');
+          }
+        };
+        this.refreshIcons();
+      },
+
+      closeConfirmDialog() {
+        this.confirmDialog.open = false;
+        this.confirmDialog.onConfirm = null;
+        this.refreshIcons();
+      },
+
+      executeConfirmAction() {
+        if (typeof this.confirmDialog.onConfirm === 'function') {
+          this.confirmDialog.onConfirm();
+        }
+        this.closeConfirmDialog();
+      },
+
+      // --- SETTINGS & EXPORT ---
+      saveProfilePreferences() {
+        if (!this.profile.name.trim()) {
+          this.profile.name = 'Pengguna Veloce';
+        }
+        if (!this.profile.initials.trim()) {
+          this.profile.initials = this.profile.name
+            .split(' ')
+            .map(n => n[0])
+            .join('')
+            .slice(0, 2)
+            .toUpperCase();
+        }
+        this.persistState();
+        this.showToast('Profil & preferensi workspace disimpan', 'success');
+      },
+
+      exportJSON() {
+        const data = {
+          exportedAt: new Date().toISOString(),
+          workspace: this.profile,
+          tasks: this.tasks
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const dateStamp = new Date().toISOString().split('T')[0];
+        a.href = url;
+        a.download = `veloce-backup-${dateStamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        this.showToast('Berkas backup JSON berhasil diunduh', 'success');
+      },
+
+      resetFilters() {
+        this.filters.search = '';
+        this.filters.status = 'all';
+        this.filters.priority = 'all';
+        this.refreshIcons();
+      },
+
+      // --- TOAST NOTIFICATION ENGINE ---
+      showToast(message, type = 'info') {
+        const id = Date.now() + Math.random();
+        this.toasts.push({ id, message, type });
+        this.refreshIcons();
+
+        setTimeout(() => {
+          this.removeToast(id);
+        }, 3000);
+      },
+
+      removeToast(id) {
+        this.toasts = this.toasts.filter(t => t.id !== id);
+      },
+
+      // --- UI FORMATTING HELPERS ---
+      priorityPercent(level) {
+        if (this.stats.total === 0) return 0;
+        const count = this.tasks.filter(t => t.priority === level).length;
+        return Math.round((count / this.stats.total) * 100);
+      },
+
+      priorityBadgeClass(priority) {
+        if (priority === 'high') {
+          return 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20';
+        }
+        if (priority === 'medium') {
+          return 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20';
+        }
+        return 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/20';
+      },
+
+      statusSelectClass(status) {
+        if (status === 'done') {
+          return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+        }
+        if (status === 'in_progress') {
+          return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20';
+        }
+        return 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700';
+      },
+
+      dueDateBadgeClass(dueDate, status) {
+        if (status === 'done') return 'text-zinc-400 dark:text-zinc-500';
+        const today = new Date().toISOString().split('T')[0];
+        if (dueDate < today) return 'text-rose-600 dark:text-rose-400 font-semibold';
+        if (dueDate === today) return 'text-amber-600 dark:text-amber-400 font-semibold';
+        return 'text-zinc-500 dark:text-zinc-400';
+      },
+
+      formatDate(dateStr) {
+        if (!dateStr) return '-';
+        const parts = dateStr.split('-');
+        if (parts.length !== 3) return dateStr;
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        const m = parseInt(parts[1], 10) - 1;
+        return `${parts[2]} ${months[m] || parts[1]}`;
+      },
+
+      getRelativeDueLabel(dateStr) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const target = new Date(dateStr + 'T00:00:00');
+        const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) return `Terlambat ${Math.abs(diffDays)} hari`;
+        if (diffDays === 0) return 'Hari ini';
+        if (diffDays === 1) return 'Besok';
+        return `${diffDays} hari lagi`;
+      },
+
+      nextStageLabel(status) {
+        if (status === 'todo') return 'Pindahkan ke In Progress';
+        if (status === 'in_progress') return 'Tandai Selesai (Done)';
+        return 'Kembalikan ke Todo';
+      },
+
+      nextStageShortLabel(status) {
+        if (status === 'todo') return 'Mulai';
+        if (status === 'in_progress') return 'Selesai';
+        return 'Reopen';
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
